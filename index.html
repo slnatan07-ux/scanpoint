@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan Points</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #ffffff; margin: 0; }
+        header { background: #000000; color: rgb(253, 253, 253); padding: 20px; }
+        .card { background: rgb(255, 255, 255); margin: 15px; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgb(102, 255, 0); }
+        #reader { width: 100%; max-width: 350px; margin: auto; border: 2px solid #f5e900; border-radius: 10px; overflow: hidden; background: rgb(0, 0, 0); }
+        ul { list-style: none; padding: 0; }
+        li { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; background-color: #000; color: #fff; font-weight: bold; }
+        button:hover { background-color: #333; }
+        #listaHistorico { display: none; margin-top: 10px; max-height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+    <script>
+    if (!localStorage.getItem("usuarioCadastrado")) {
+        window.location.href = "cadastro.html";
+    }
+    </script>
+
+    <header>
+        <h1>SCAN POINTS</h1>
+    </header>
+
+    <div class="card">
+        <h2>Pontos</h2>
+        <h1 id="pontos">0</h1>
+        <h3>Nível</h3>
+        <h2 id="nivel">Bronze</h2>
+    </div>
+
+    <div class="card">
+        <h2>Scanner QR Code</h2>
+        <div id="reader"></div>
+        <p id="statusCamera">Carregando câmera...</p>
+    </div>
+
+    <div class="card">
+        <h2>Ranking Global</h2>
+        <ol id="listaRanking" style="padding-left: 20px; text-align: left; max-width: 220px; margin: auto;"></ol>
+    </div>
+
+    <div class="card">
+        <h2>Histórico</h2>
+        <button id="btnHistorico" onclick="mostrarHistorico()">Ver Histórico</button>
+        <ul id="listaHistorico"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Recompensas</h2>
+        <button onclick="trocar(200)">Cupom (200 pts)</button>
+        <button onclick="trocar(500)">Prêmio Especial (500 pts)</button>
+    </div>
+
+    <script>
+        // Obtém dinamicamente o ID de quem efetuou o cadastro ou assume 1 como padrão
+        const USUARIO_ID = localStorage.getItem("usuarioId") || 1; 
+
+        async function carregarDados() {
+            try {
+                const resUser = await fetch(`/api/usuario/${USUARIO_ID}`);
+                if (resUser.ok) {
+                    const dataUser = await resUser.json();
+                    document.getElementById("pontos").innerText = dataUser.pontos;
+                    document.getElementById("nivel").innerText = dataUser.nivel;
+                }
+
+                const resRanking = await fetch('/api/ranking');
+                const dataRanking = await resRanking.json();
+                const listaRanking = document.getElementById("listaRanking");
+                listaRanking.innerHTML = "";
+                dataRanking.forEach(u => {
+                    listaRanking.innerHTML += `<li>${u.nome} - <strong>${u.pontos} pts</strong> (${u.nivel})</li>`;
+                });
+
+                const resHist = await fetch(`/api/historico/${USUARIO_ID}`);
+                const dataHist = await resHist.json();
+                const listaHist = document.getElementById("listaHistorico");
+                listaHist.innerHTML = "";
+                dataHist.forEach(h => {
+                    listaHist.innerHTML += `<li>${h.codigo_hash} (${h.valor_pontos} pts)</li>`;
+                });
+            } catch (err) {
+                console.log("Erro ao carregar dados da API:", err);
+            }
+        }
+
+        async function sucesso(codigo) {
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuarioId: USUARIO_ID, codigo: codigo })
+            });
+            const resultado = await response.json();
+
+            if (resultado.success) {
+                alert(resultado.mensagem);
+                carregarDados();
+            } else {
+                alert(resultado.error);
+            }
+        }
+
+        async function trocar(custo) {
+            const response = await fetch('/api/trocar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuarioId: USUARIO_ID, custo: custo })
+            });
+            const resultado = await response.json();
+
+            if (resultado.success) {
+                alert("Recompensa resgatada com sucesso!");
+                carregarDados();
+            } else {
+                alert(resultado.error);
+            }
+        }
+
+        function mostrarHistorico() {
+            let lista = document.getElementById("listaHistorico");
+            let btn = document.getElementById("btnHistorico");
+            if (lista.style.display === "none" || lista.style.display === "") {
+                lista.style.display = "block";
+                btn.innerText = "Esconder Histórico";
+            } else {
+                lista.style.display = "none";
+                btn.innerText = "Ver Histórico";
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            sucesso(decodedText);
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: { width: 250, height: 250 }, supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA] }, false
+        );
+        html5QrcodeScanner.render(onScanSuccess, (err) => {});
+        document.getElementById("statusCamera").style.display = "none";
+
+        carregarDados();
+    </script>
+</body>
+</html>

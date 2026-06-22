@@ -15,11 +15,9 @@ app.use(cors());
 app.use(express.json());
 
 const pool = new Pool({
-    user: "postgres",
-    host: "localhost",
-    database: "fidelidade",
-    password: "",
-    port: 5432
+    connectionString: process.env.DATABASE_URL
+  ssl: process.env.DATABASE_URL ?
+{rejectUnauthorized: false } : false
 });
 
 pool.query("SELECT NOW()")
@@ -164,7 +162,7 @@ app.get("/api/historico/:id", async (req, res) => {
 app.post("/api/scan", async (req, res) => {
     try {
         const { usuarioId, codigo } = req.body;
-        const pontosGanhos = 50; // Quantidade de pontos concedida por leitura
+        const pontosGanhos = 10; // Quantidade de pontos concedida por leitura
 
         await pool.query("UPDATE usuarios SET pontos = pontos + $1 WHERE id = $2", [pontosGanhos, usuarioId]);
         
